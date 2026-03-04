@@ -299,6 +299,20 @@ def make_preprocessor_nodes(context):
         allow_substs=True,
     )
 
+    use_noise_filter_type = (
+        LaunchConfiguration("noise_filter_type").perform(context).lower() if LaunchConfiguration("noise_filter_type").perform(context).lower() != "none" else None
+    )
+    outlier_output_topic = (
+        "pointcloud_before_noise_filter" if use_noise_filter_type is not None else "pointcloud_before_sync"
+    )
+    noise_filter_node_param = ParameterFile(
+        param_file=LaunchConfiguration("polar_voxel_noise_filter_node_param_file").perform(context)
+    )
+
+    cluster_filter_node_param = ParameterFile(
+        param_file=LaunchConfiguration("polar_voxel_cluster_filter_node_param_file").perform(context)
+    )
+
     # Ring Outlier Filter is the last component in the pipeline, so control the output frame here
     if LaunchConfiguration("output_as_sensor_frame").perform(context).lower() == "true":
         ring_outlier_output_frame = {"output_frame": LaunchConfiguration("frame_id")}
@@ -318,7 +332,8 @@ def make_preprocessor_nodes(context):
                 name="ring_outlier_filter",
                 remappings=[
                     ("input", "rectified/pointcloud_ex"),
-                    ("output", "pointcloud_before_sync"),
+                    #("output", "pointcloud_before_sync"),
+                    ("output", outlier_output_topic),
                 ],
                 parameters=[
                     ring_outlier_filter_node_param,
@@ -338,7 +353,8 @@ def make_preprocessor_nodes(context):
                 name="dual_return_filter",
                 remappings=[
                     ("input", "rectified/pointcloud_ex"),
-                    ("output", "pointcloud_before_sync"),
+                    #("output", "pointcloud_before_sync"),
+                    ("output", outlier_output_topic),
                 ],
                 parameters=[
                     {
@@ -349,6 +365,38 @@ def make_preprocessor_nodes(context):
                     }
                 ]
                 + [load_composable_node_param(context, "dual_return_filter_param_file")],
+                extra_arguments=[
+                    {"use_intra_process_comms": LaunchConfiguration("use_intra_process")}
+                ],
+            )
+        )
+    if use_noise_filter_type == "polar_voxel":
+        nodes.append(
+            ComposableNode(
+                package="autoware_pointcloud_preprocessor",
+                plugin="autoware::pointcloud_preprocessor::PolarVoxelNoiseFilterComponent",
+                name="polar_voxel_noise_filter",
+                remappings=[
+                    ("input", outlier_output_topic),
+                    ("output", "pointcloud_before_sync"),
+                ],
+                parameters=[noise_filter_node_param],
+                extra_arguments=[
+                    {"use_intra_process_comms": LaunchConfiguration("use_intra_process")}
+                ],
+            )
+        )
+    elif use_noise_filter_type == "cluster":
+        nodes.append(
+            ComposableNode(
+                package="autoware_pointcloud_preprocessor",
+                plugin="autoware::pointcloud_preprocessor::PolarVoxelClusterFilterComponent",
+                name="polar_voxel_cluster_filter",
+                remappings=[
+                    ("input", outlier_output_topic),
+                    ("output", "pointcloud_before_sync"),
+                ],
+                parameters=[cluster_filter_node_param],
                 extra_arguments=[
                     {"use_intra_process_comms": LaunchConfiguration("use_intra_process")}
                 ],
@@ -722,6 +770,20 @@ def generate_launch_description():
             "/config/polar_voxel_outlier_filter_node.param.yaml",
         ],
     )
+    add_launch_arg(
+        "polar_voxel_cluster_filter_param_file",
+        [
+            FindPackageShare("aip_x2_gen2_launch"),
+            "/config/polar_voxel_cluster_filter_node.param.yaml",
+        ],
+    )
+    add_launch_arg(
+        "polar_voxel_noise_filter_node_param_file",
+        [
+            FindPackageShare("aip_x2_gen2_launch"),
+            "/config/polar_voxel_noise_filter_node.param.yaml",
+        ],
+    )
     add_launch_arg("vertical_bins", "128")
     add_launch_arg("horizontal_ring_id", "12")
     add_launch_arg("blockage_range", "[270.0, 90.0]")
@@ -729,6 +791,7 @@ def generate_launch_description():
     add_launch_arg("min_azimuth_deg", "135.0")
     add_launch_arg("max_azimuth_deg", "225.0")
     add_launch_arg("enable_blockage_diag", "true")
+    add_launch_arg("noise_filter_type", "polar_voxel") # polar_voxel or cluster or none
 
     add_launch_arg("calibration_file", "")
     add_launch_arg("calibration_download_enabled")
