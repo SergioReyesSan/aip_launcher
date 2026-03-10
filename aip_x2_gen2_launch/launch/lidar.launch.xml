@@ -28,7 +28,7 @@
     <choice value="disable"/>
   </arg>
 
-  <arg name="noise_filter_type" default="polar_voxel">
+  <arg name="noise_filter_type" default="none">
     <choice value="polar_voxel"/>
     <choice value="cluster"/>
     <choice value="none"/>
