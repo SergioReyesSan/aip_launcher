@@ -10,7 +10,7 @@
   <arg name="vehicle_mirror_param_file"/>
   <arg name="use_pointcloud_container" default="false" description="launch pointcloud container"/>
   <arg name="pointcloud_container_name" default="pointcloud_container"/>
-  <arg name="pipeline_mode" default="cpu">
+  <arg name="pipeline_mode" default="cuda">
     <choice value="cuda"/>
     <choice value="cpu"/>
     <choice value="cuda-all-in-one"/>
@@ -28,7 +28,7 @@
     <choice value="disable"/>
   </arg>
 
-  <arg name="noise_filter_type" default="polar_voxel">
+  <arg name="noise_filter_type" default="none">
     <choice value="polar_voxel"/>
     <choice value="cluster"/>
     <choice value="none"/>

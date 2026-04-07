@@ -420,6 +420,23 @@ def make_cuda_preprocessor_nodes(context):
         allow_substs=True,
     )
 
+    noise_filter_node_param = ParameterFile(
+        param_file=LaunchConfiguration("polar_voxel_noise_filter_node_param_file").perform(context),
+        allow_substs=True,
+    )
+
+    # Determine noise filter type
+    noise_filter_type_val = LaunchConfiguration("noise_filter_type").perform(context).lower()
+    use_noise_filter_type = noise_filter_type_val if noise_filter_type_val != "none" else None
+
+    # Determine topic chaining
+    preprocessor_output_topic = (
+        "pointcloud_before_noise_filter"
+        if use_noise_filter_type is not None
+        else "pointcloud_before_sync"
+    )
+
+    # Bounding box parameters
     preprocessor_parameters = {}
     preprocessor_parameters["crop_box.min_x"] = [
         vehicle_info["min_longitudinal_offset"],
@@ -446,7 +463,8 @@ def make_cuda_preprocessor_nodes(context):
         vehicle_info["wheels_max_height_offset"],
     ]
 
-    return [
+    # 1. Define the main preprocessor node
+    nodes = [
         ComposableNode(
             package="autoware_cuda_pointcloud_preprocessor",
             plugin="autoware::cuda_pointcloud_preprocessor::CudaPointcloudPreprocessorNode",
@@ -464,14 +482,30 @@ def make_cuda_preprocessor_nodes(context):
                     "/sensing/vehicle_velocity_converter/twist_with_covariance",
                 ),
                 ("~/input/imu", "/sensing/imu/imu_data"),
-                ("~/output/pointcloud", "pointcloud_before_sync"),
-                ("~/output/pointcloud/cuda", "pointcloud_before_sync/cuda"),
+                ("~/output/pointcloud", preprocessor_output_topic),
+                ("~/output/pointcloud/cuda", f"{preprocessor_output_topic}/cuda"),
             ],
             # The whole node can not set use_intra_process due to type negotiation internal topics
             # extra_arguments=[{"use_intra_process_comms": LaunchConfiguration("use_intra_process")}],
         )
     ]
 
+    # 2. Append the Noise Filter if selected
+    if use_noise_filter_type == "polar_voxel":
+        nodes.append(
+            ComposableNode(
+                package="autoware_cuda_pointcloud_preprocessor",
+                plugin="autoware::cuda_pointcloud_preprocessor::CudaPolarVoxelNoiseFilterNode",
+                name="cuda_polar_voxel_noise_filter",
+                remappings=[
+                    ("~/input/pointcloud", preprocessor_output_topic),
+                    ("~/output/pointcloud", "pointcloud_before_sync"),
+                ],
+                parameters=[noise_filter_node_param],
+            )
+        )
+
+    return nodes
 
 def make_blockage_diag_nodes(context):
     return [

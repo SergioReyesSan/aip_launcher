@@ -17,4 +17,4 @@
     primary_return_types: [1, 6, 8, 10]          # Return types considered as primary returns (all others are secondary)
 
     # Performance and debug control
-    publish_noise_cloud: true                    # Generate and publish noise cloud for debugging (true for development)          
+    publish_noise_cloud: false                    # Generate and publish noise cloud for debugging (true for development)          
